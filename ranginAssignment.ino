@@ -63,11 +63,9 @@ void setup() {
 }
 
 void loop() {
-  //Serial.println(sensorL.getDist());
-  //Serial.println(sensorR.getDist());
   updateAll();
-  // if (buttonA.isPressed())
-  // {
+   if (buttonA.isPressed())
+   {
   lcd.clear();
   delay(700);
   for (i = 0; i < 500; i++)
@@ -78,14 +76,10 @@ void loop() {
     updateAll();
     activeAvoid(sideDist, 4, desiredHead, 4, &w, &x, &y, &z);
     updateAll();
-    // }
+     }
   }
 }
 
-void updateAll() { // will make our updates from gyro and sensor before printing to LCD
-  gyroHeading();
-  printInfo();
-}
 
 void activeAvoid(float sideDist[], int size, float desiredHead[], int, float *w, float *x, float *y, float *z) { //this is the inital avoidance algorithem
   float bestRoute = 0;
@@ -114,7 +108,7 @@ void quickCheck(float sideDist[], int isize, float desiredHead[], int dSide, flo
   stationaryLeftTurn(desiredHead[0], 100);
   farLeft(sideDist, 4);
   *w =  sideDist[0];
-  delay(1000);
+  delay(100);
   updateAll();
 
   //desiredHead[1] = desiredHead[0] / 2;
@@ -123,7 +117,7 @@ void quickCheck(float sideDist[], int isize, float desiredHead[], int dSide, flo
   stationaryRightTurn(desiredHead[1], 100);
   nearLeft(sideDist, 4);
   *w =  sideDist[0];
-  delay(1000);
+  delay(100);
   updateAll();
 
   //desiredHead[2] = abs(gyroHeading()) * 2;
@@ -132,7 +126,7 @@ void quickCheck(float sideDist[], int isize, float desiredHead[], int dSide, flo
   stationaryRightTurn(desiredHead[2], 100);
   farRight(sideDist, 4);
   *y =  sideDist[2];
-  delay (1000);
+  delay (100);
   updateAll();
 
   //desiredHead[3] = desiredHead[2] / 4;
@@ -141,32 +135,9 @@ void quickCheck(float sideDist[], int isize, float desiredHead[], int dSide, flo
   stationaryRightTurn(desiredHead[3], 100);
   nearRight(sideDist, 4);
   *z =  sideDist[3];
-  delay (1000);
+  delay (100);
   updateAll();
 }
-
-void stationaryRightTurn(float angle, int speed) {
-  float distance = angle * 0.05;
-  int countsLeft = 0;
-  int countsRight = 0;
-  float leftTarget = distance * 161.2;
-  float rightTarget = distance * -161.2;
-  int countsLeftBefore = encoders.getCountsLeft();
-  int countsRightBefore = encoders.getCountsRight();
-  int lSpeed = speed;
-
-  while (countsLeft <= leftTarget && countsRight >= rightTarget) {
-    updateAll();
-    motors.setSpeeds(lSpeed, -speed);
-    int leftAfter = encoders.getCountsLeft();
-    int rightAfter = encoders.getCountsRight();
-    countsLeft = leftAfter - countsLeftBefore;
-    countsRight = rightAfter - countsRightBefore;
-  }
-  motors.setSpeeds(0, 0); // stop
-}
-
-
 
 void getGoing() {  //robot moves if sensor distance is greater than collision distance and heading is in forward direction
   //while ((sensorDist() > COLLISION_DIST) && (senseLeft() != 1) && (senseRight() != 1))        // try to incorporare this into the expression((gyroHeading() < 90) || (gyroHeading() > -90)))
@@ -185,11 +156,7 @@ void getGoing() {  //robot moves if sensor distance is greater than collision di
 
   } // while > collision distance
 
-
-
-  // obstacles on sides
-
-    //slightAdjust();
+ 
     buzzer.playFrequency(800, 100, 10);
    // Serial.println(sensorDist());
 
@@ -200,43 +167,7 @@ void getGoing() {  //robot moves if sensor distance is greater than collision di
     while (senseLeft() == 1) {
       stationaryRightTurn(1, 50);
     }
-/*
-    while (sensorDist() < COLLISION_DIST) {
-      motors.setSpeeds(-leftSpeed, -rightSpeed);
-      delay(500);
-      stationaryLeftTurn(90, 50);
-    }
-
-    */
 }
-
-/*
-  void adjustHeading() { //commands avoidance turn according to heading
-  int i = 0;
-
-  do  {
-    if (gyroHeading() >= 0)
-    {
-      stationaryLeftTurn(45, 75);
-      delay(500);
-      updateAll();
-      i++;
-    }
-    if (gyroHeading() < 0)
-    {
-      stationaryRightTurn(45, 75);
-      delay(500);
-      updateAll();
-      i++;
-    }
-  } while ((tooClose() == 1) && (i != 3));
-
-  if (i == 3)
-  {
-    aboutFace();
-  }
-  }
-*/
 
 void backToInitial() {
 
@@ -338,8 +269,6 @@ void farRight(float sideDist[], int size) { //writes right side distances to arr
   sideDist[3] = sensorDist(); // + senseLeft() + senseRight();
 }
 
-
-
 float sensorDist() { //active ranging using analog sensor and calculated formula on exponential curve
 
   unsigned int rangeAway;
@@ -371,8 +300,6 @@ int senseRight() {
   return i;
 }
 
-
-
 void makeMoves(float route, float *w, float *x, float *y, float *z) {
 
   Serial.println("route:");
@@ -380,19 +307,19 @@ void makeMoves(float route, float *w, float *x, float *y, float *z) {
 
   if (route == *w)
   {
-    stationaryLeftTurn(desiredHead[0] + desiredHead[1] + desiredHead[2] + desiredHead[0], 75);
+    stationaryLeftTurn(desiredHead[1] + desiredHead[2] + desiredHead[3], 75);
   }
   else if (route == *x)
   {
-    stationaryLeftTurn(desiredHead[1], 75);
+    stationaryLeftTurn(desiredHead[3] + desiredHead[2], 75);
   }
   else if (route == *y)
   {
-    stationaryRightTurn(desiredHead[2], 75);
+    stationaryLeftTurn(desiredHead[3], 75);
   }
   else if (route == *z)
   {
-    stationaryRightTurn(desiredHead[3], 75);
+    //stationaryLeftTurn(desiredHead[3], 75);
   }
 }
 
@@ -406,10 +333,36 @@ int tooClose() {  //checks if we are too close and sends back 0 or 1
 // MIGHT NOT BE USED
 /*
 
-void aboutFace()  { //turns robot 180 degrees
+  void adjustHeading() { //commands avoidance turn according to heading
+  int i = 0;
 
+  do  {
+    if (gyroHeading() >= 0)
+    {
+      stationaryLeftTurn(45, 75);
+      delay(500);
+      updateAll();
+      i++;
+    }
+    if (gyroHeading() < 0)
+    {
+      stationaryRightTurn(45, 75);
+      delay(500);
+      updateAll();
+      i++;
+    }
+  } while ((tooClose() == 1) && (i != 3));
+
+  if (i == 3)
+  {
+    aboutFace();
+  }
+  }
+
+void aboutFace()  { //turns robot 180 degrees
   stationaryLeftTurn(180, 75);
 }
+
 void slightAdjust() {  //gets romi in reverse for a small period to avoid side obstacle
   buzzer.playFrequency(800, 100, 10);
   motors.setSpeeds(-50, -50);
@@ -417,7 +370,6 @@ void slightAdjust() {  //gets romi in reverse for a small period to avoid side o
 }
 
 void checkSides() { //checks the presense of an obstacle on the left or right using side sensors
-
   Serial.println("checking sides L/R:");
   Serial.println(senseLeft());
   Serial.println(senseRight());
@@ -445,6 +397,31 @@ void checkSides() { //checks the presense of an obstacle on the left or right us
 */
 
 // MISC FUNCTIONS
+void updateAll() { // will make our updates from gyro and sensor before printing to LCD
+  gyroHeading();
+  printInfo();
+}
+
+void stationaryRightTurn(float angle, int speed) {
+  float distance = angle * 0.05;
+  int countsLeft = 0;
+  int countsRight = 0;
+  float leftTarget = distance * 161.2;
+  float rightTarget = distance * -161.2;
+  int countsLeftBefore = encoders.getCountsLeft();
+  int countsRightBefore = encoders.getCountsRight();
+  int lSpeed = speed;
+
+  while (countsLeft <= leftTarget && countsRight >= rightTarget) {
+    updateAll();
+    motors.setSpeeds(lSpeed, -speed);
+    int leftAfter = encoders.getCountsLeft();
+    int rightAfter = encoders.getCountsRight();
+    countsLeft = leftAfter - countsLeftBefore;
+    countsRight = rightAfter - countsRightBefore;
+  }
+  motors.setSpeeds(0, 0); // stop
+}
 void stationaryLeftTurn(float angle, int speed) {
   float distance = angle * 0.05;
   int countsLeft = 0;
