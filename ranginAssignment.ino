@@ -31,7 +31,14 @@ int leftSpeed = 100;
 int rightSpeed = 120;
 int countsLeftCurrent;
 int countsRightCurrent;
-int gyroResetSteps = 4096;
+int gyroResetSteps = 1024;
+int stuckOrNot = 0;
+int sideAvoidDegrees = 3;
+int beep = 0;
+float sensedSide = 5;
+int turningSpeed = 100;
+int minConstraint = 50;
+int maxConstraint = 150;
 
 float sorteD(float, int);
 float sideDist[4];
@@ -62,25 +69,36 @@ void setup() {
 
   int countsLeftInitial = encoders.getCountsLeft();
   int countsRightInitial = encoders.getCountsRight();
-  
+
+  Serial.println("ok let's go");
+
 }
 
 void loop() {
+  //Serial.println("ok let's go");
   updateAll();
-   if (buttonA.isPressed())
-   {
-  lcd.clear();
-  delay(700);
-  for (i = 0; i < 500; i++)
+  if (buttonA.isPressed())
   {
-    //Serial.println(senseLeft());
-    updateAll();
-    getGoing();
-    updateAll();
-    activeAvoid(sideDist, 4, desiredHead, 4, &w, &x, &y, &z);
-    updateAll();
-     }
+    lcd.clear();
+    delay(700);
+    for (i = 0; i < 500; i++)
+    {
+      //Serial.println(senseLeft());
+      updateAll();
+      getGoing();
+      updateAll();
+      activeAvoid(sideDist, 4, desiredHead, 4, &w, &x, &y, &z);
+      updateAll();
+    }
   }
+
+  if (buttonB.isPressed())
+  {
+    Serial.println("reversing");
+    delay(700);
+    reversing(2, 50);
+  }
+
 }
 
 
@@ -90,9 +108,8 @@ void activeAvoid(float sideDist[], int size, float desiredHead[], int, float *w,
   {
     // getBack()
     buzzer.playFrequency(800, 100, 10);
-    //motors.setSpeeds(-50, -50);
-   // delay(500); // TODO change to goStraightBack
-    
+    reversing(2, 50);
+
     updateAll();
     quickCheck(sideDist, 4, desiredHead, 4, w, x, y, z);
     updateAll();
@@ -108,34 +125,39 @@ void quickCheck(float sideDist[], int isize, float desiredHead[], int dSide, flo
 
   desiredHead[0] = 90;
 
-  stationaryLeftTurn(desiredHead[0], 100);
+  stationaryLeftTurn(desiredHead[0], turningSpeed);
   farLeft(sideDist, 4);
   *w =  sideDist[0];
   updateAll();
+  //delay(1000);
 
   //desiredHead[1] = desiredHead[0] / 2;
 
   desiredHead[1] = 60;
-  stationaryRightTurn(desiredHead[1], 100);
+  stationaryRightTurn(desiredHead[1], turningSpeed);
   nearLeft(sideDist, 4);
   *w =  sideDist[0];
   updateAll();
+  //delay(1000);
 
   //desiredHead[2] = abs(gyroHeading()) * 2;
   desiredHead[2] = 60;
 
-  stationaryRightTurn(desiredHead[2], 100);
+  stationaryRightTurn(desiredHead[2], turningSpeed);
   farRight(sideDist, 4);
   *y =  sideDist[2];
   updateAll();
+  //delay(1000);
 
   //desiredHead[3] = desiredHead[2] / 4;
   desiredHead[3] = 60;
 
-  stationaryRightTurn(desiredHead[3], 100);
+  stationaryRightTurn(desiredHead[3], turningSpeed);
   nearRight(sideDist, 4);
   *z =  sideDist[3];
   updateAll();
+  //delay(1000);
+
 }
 
 void getGoing() {  //robot moves if sensor distance is greater than collision distance and heading is in forward direction
@@ -143,6 +165,7 @@ void getGoing() {  //robot moves if sensor distance is greater than collision di
 
   while (sensorDist() > COLLISION_DIST && (senseLeft() != 1) && (senseRight() != 1))
   {
+
     updateAll();
     motors.setSpeeds(leftSpeed, rightSpeed);
     updateAll();
@@ -151,25 +174,35 @@ void getGoing() {  //robot moves if sensor distance is greater than collision di
     // no obstacles
     if ((senseLeft() == 0) && (senseRight() == 0) && (sensorDist() > COLLISION_DIST)) {
       backToInitial();
+      //sensedSide = 0;
+      if (sensedSide <= 0) {
+        buzzer.playFrequency(800, 100, 10);
+        sensedSide = 5;
+      }
+
+      Serial.println(sensedSide);
     }
 
-  } // while > collision distance
 
- 
-    buzzer.playFrequency(800, 100, 10);
-   // Serial.println(sensorDist());
+  }
 
-    while (senseRight() == 1) {
-      stationaryLeftTurn(3, 100);
-    }
-    
-    while (senseLeft() == 1) {
-      stationaryRightTurn(3, 100);
-    }
+  while (senseRight() == 1) {
+    //sideAvoidDegrees = sensedSide;
+    stationaryLeftTurn(sideAvoidDegrees, turningSpeed);
+    //sensedSide = sensedSide - 0.01;
+  }
+
+  while (senseLeft() == 1) {
+    //sideAvoidDegrees = sensedSide;
+    stationaryRightTurn(sideAvoidDegrees, turningSpeed);
+    //sensedSide = sensedSide - 0.01;
+  }
+
+
+  // sideAvoidDegrees = sideAvoidDegrees - sensedSide * 0.01;
 }
 
 void backToInitial() {
-
 
   float speedAdjust = (abs(gyroHeading()) - speedAdjust) * 0.01;
 
@@ -190,24 +223,24 @@ void backToInitial() {
   }
 
   if (gyroHeading() < 5 && gyroHeading() > -5) {
-    leftSpeed = 100;
-    rightSpeed = 110;
+
+    leftSpeed = sensorDist() * 25 - 100; //
+    rightSpeed = sensorDist() * 25 - 100;
+    Serial.println(leftSpeed);
+    Serial.println(rightSpeed);
+
   }
 
-  //  Serial.println();
-  //  Serial.println(leftSpeed);
-  //  Serial.println(rightSpeed);
-  //  Serial.println(speedAdjust);
   if (leftSpeed < 0) {
-    leftSpeed = constrain(leftSpeed, -200, -25);
+    leftSpeed = constrain(leftSpeed, -maxConstraint, -minConstraint);
   } else {
-    leftSpeed = constrain(leftSpeed, 25, 200);
+    leftSpeed = constrain(leftSpeed, minConstraint, maxConstraint);
   }
 
   if (rightSpeed < 0) {
-    rightSpeed = constrain(rightSpeed, -200, -25);
+    rightSpeed = constrain(rightSpeed, -maxConstraint, -minConstraint);
   } else {
-    rightSpeed = constrain(rightSpeed, 25, 200);
+    rightSpeed = constrain(rightSpeed, minConstraint, maxConstraint);
   }
 
   motors.setSpeeds(leftSpeed, rightSpeed);
@@ -217,12 +250,12 @@ void backToInitial() {
 float sorteD(float sideDist[], int size) { //this bubble sort is used to find the distance giving Romi the most range to move when doing its quickCheck func.
   int i = 0, j = 0;
 
- Serial.println("Unsorted:");
+  Serial.println("Unsorted:");
   Serial.println(sideDist[0]);
   Serial.println(sideDist[1]);
   Serial.println(sideDist[2]);
   Serial.println(sideDist[3]);
-  
+
   float temp = 0, swap = 0;
   for (j = 0; j < 3; j++)
   {
@@ -247,7 +280,7 @@ float sorteD(float sideDist[], int size) { //this bubble sort is used to find th
   Serial.println(sideDist[1]);
   Serial.println(sideDist[2]);
   Serial.println(sideDist[3]);
-  
+
   return sideDist[3];
 }
 
@@ -301,24 +334,31 @@ int senseRight() {
 
 void makeMoves(float route, float *w, float *x, float *y, float *z) {
 
-  Serial.println("route:");
-  Serial.println(route);
+  Serial.println("stuckornot:");
+  Serial.println(stuckOrNot);
 
-  if (route == *w)
-  {
-    stationaryLeftTurn(desiredHead[1] + desiredHead[2] + desiredHead[3], 75);
-  }
-  else if (route == *x)
-  {
-    stationaryLeftTurn(desiredHead[3] + desiredHead[2], 75);
-  }
-  else if (route == *y)
-  {
-    stationaryLeftTurn(desiredHead[3], 75);
-  }
-  else if (route == *z)
-  {
-    //stationaryLeftTurn(desiredHead[3], 75);
+  if (stuckOrNot == 2) {
+    Serial.println("we're stuck");
+    stationaryLeftTurn(180, turningSpeed);
+    stuckOrNot = 0;
+  } else {
+    if (route == *w)
+    {
+      stationaryLeftTurn(desiredHead[1] + desiredHead[2] + desiredHead[3], 75);
+      stuckOrNot++;
+    }
+    else if (route == *x)
+    {
+      stationaryLeftTurn(desiredHead[3] + desiredHead[2], 75);
+    }
+    else if (route == *y)
+    {
+      stationaryLeftTurn(desiredHead[3], 75);
+    }
+    else if (route == *z)
+    {
+      stuckOrNot++;
+    }
   }
 }
 
@@ -358,17 +398,17 @@ int tooClose() {  //checks if we are too close and sends back 0 or 1
   }
   }
 
-void aboutFace()  { //turns robot 180 degrees
+  void aboutFace()  { //turns robot 180 degrees
   stationaryLeftTurn(180, 75);
-}
+  }
 
-void slightAdjust() {  //gets romi in reverse for a small period to avoid side obstacle
+  void slightAdjust() {  //gets romi in reverse for a small period to avoid side obstacle
   buzzer.playFrequency(800, 100, 10);
   motors.setSpeeds(-50, -50);
   delay(300);
-}
+  }
 
-void checkSides() { //checks the presense of an obstacle on the left or right using side sensors
+  void checkSides() { //checks the presense of an obstacle on the left or right using side sensors
   Serial.println("checking sides L/R:");
   Serial.println(senseLeft());
   Serial.println(senseRight());
@@ -391,7 +431,7 @@ void checkSides() { //checks the presense of an obstacle on the left or right us
 
   motors.setSpeeds(leftSpeed, rightSpeed);
 
-}
+  }
 
 */
 
@@ -414,6 +454,10 @@ void stationaryRightTurn(float angle, int speed) {
   int lSpeed = speed;
 
   while (countsLeft <= leftTarget && countsRight >= rightTarget) {
+
+    if (beep == 1) {
+      buzzer.playFrequency(800, 100, 10);
+    }
     updateAll();
     motors.setSpeeds(lSpeed, -speed);
     int leftAfter = encoders.getCountsLeft();
@@ -435,6 +479,10 @@ void stationaryLeftTurn(float angle, int speed) {
   int rSpeed = speed;
 
   while (countsLeft >= leftTarget && countsRight <= rightTarget) {
+
+    if (beep == 1) {
+      buzzer.playFrequency(800, 100, 10);
+    }
     updateAll();
     motors.setSpeeds(-speed, rSpeed);
     int leftAfter = encoders.getCountsLeft();
@@ -445,10 +493,35 @@ void stationaryLeftTurn(float angle, int speed) {
   motors.setSpeeds(0, 0); // stop
 }
 
+void reversing(float distance, int speed) {
+  int countsLeft = 0;
+  int countsRight = 0;
+  float leftTarget = distance * -161.2;
+  float rightTarget = distance * -161.2;
+  int countsLeftBefore = encoders.getCountsLeft();
+  int countsRightBefore = encoders.getCountsRight();
+  // Serial.println(countsLeftBefore);
+  // Serial.println(countsRightBefore);
+
+  while (countsLeft > leftTarget && countsRight > rightTarget) {
+
+    if (beep == 1) {
+      buzzer.playFrequency(800, 100, 10);
+    }
+    updateAll();
+    motors.setSpeeds(-speed, -speed);
+    int leftAfter = encoders.getCountsLeft();
+    int rightAfter = encoders.getCountsRight();
+    countsLeft = leftAfter - countsLeftBefore;
+    countsRight = rightAfter - countsRightBefore;
+  }
+  motors.setSpeeds(0, 0); // stop
+}
+
 void printInfo() { //prints information to screen
 
-  // use this for demo 
- 
+  // use this for demo
+
   lcd.gotoXY(0, 0);
   lcd.print(sensorDist());
   lcd.print("  ");
@@ -457,7 +530,7 @@ void printInfo() { //prints information to screen
   lcd.print(" ");
 
 
-// debugging
+  // debugging
   /*
     Serial.println("Debug: left, right, middle, left, right");
     Serial.println(senseLeft());
@@ -467,13 +540,13 @@ void printInfo() { //prints information to screen
     Serial.println(sensorR.getDist());
 
   */
-/*
-  lcd.gotoXY(0, 0);
-  lcd.print(countsLeftCurrent-countsRightCurrent);
-  lcd.print("  ");
-  lcd.gotoXY(0, 1);
-  lcd.print(gyroHeading());
-  lcd.print(" ");
+  /*
+    lcd.gotoXY(0, 0);
+    lcd.print(countsLeftCurrent-countsRightCurrent);
+    lcd.print("  ");
+    lcd.gotoXY(0, 1);
+    lcd.print(gyroHeading());
+    lcd.print(" ");
   */
 }
 
