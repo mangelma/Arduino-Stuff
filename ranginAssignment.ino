@@ -11,7 +11,7 @@ Romi32U4Motors motors;
 Romi32U4Buzzer buzzer;
 Romi32U4Encoders encoders;
 LSM6 imu;
-#define COLLISION_DIST 5
+#define COLLISION_DIST 4
 #define E 2.71828
 #define MOUNT_DIST 1.26
 #define OFF_TRACK 90
@@ -25,10 +25,13 @@ int16_t gyroOffset;                   // rotationresist
 uint16_t gyroLastUpdate = 0;          // rotationresist
 int countsLeft = 0;
 int countsRight = 0;
-int delayBetweenMoves = 100;
+int delayBetween = 500;
 int i = 0;
-int leftSpeed = 200;
-int rightSpeed = 220;
+int leftSpeed = 100;
+int rightSpeed = 120;
+int countsLeftCurrent;
+int countsRightCurrent;
+int gyroResetSteps = 4096;
 
 float sorteD(float, int);
 float sideDist[4];
@@ -56,10 +59,10 @@ void setup() {
   lcd.gotoXY(0, 0);
   lcd.print("ready");
   lcd.print("   ");
-  delay(1000);
-  lcd.clear();
-  lcd.gotoXY(0, 0);
-  lcd.print("setupped");
+
+  int countsLeftInitial = encoders.getCountsLeft();
+  int countsRightInitial = encoders.getCountsRight();
+  
 }
 
 void loop() {
@@ -87,8 +90,8 @@ void activeAvoid(float sideDist[], int size, float desiredHead[], int, float *w,
   {
     // getBack()
     buzzer.playFrequency(800, 100, 10);
-    motors.setSpeeds(-50, -50);
-    delay(500);
+    //motors.setSpeeds(-50, -50);
+   // delay(500); // TODO change to goStraightBack
     
     updateAll();
     quickCheck(sideDist, 4, desiredHead, 4, w, x, y, z);
@@ -108,7 +111,6 @@ void quickCheck(float sideDist[], int isize, float desiredHead[], int dSide, flo
   stationaryLeftTurn(desiredHead[0], 100);
   farLeft(sideDist, 4);
   *w =  sideDist[0];
-  delay(100);
   updateAll();
 
   //desiredHead[1] = desiredHead[0] / 2;
@@ -117,7 +119,6 @@ void quickCheck(float sideDist[], int isize, float desiredHead[], int dSide, flo
   stationaryRightTurn(desiredHead[1], 100);
   nearLeft(sideDist, 4);
   *w =  sideDist[0];
-  delay(100);
   updateAll();
 
   //desiredHead[2] = abs(gyroHeading()) * 2;
@@ -126,7 +127,6 @@ void quickCheck(float sideDist[], int isize, float desiredHead[], int dSide, flo
   stationaryRightTurn(desiredHead[2], 100);
   farRight(sideDist, 4);
   *y =  sideDist[2];
-  delay (100);
   updateAll();
 
   //desiredHead[3] = desiredHead[2] / 4;
@@ -135,7 +135,6 @@ void quickCheck(float sideDist[], int isize, float desiredHead[], int dSide, flo
   stationaryRightTurn(desiredHead[3], 100);
   nearRight(sideDist, 4);
   *z =  sideDist[3];
-  delay (100);
   updateAll();
 }
 
@@ -161,11 +160,11 @@ void getGoing() {  //robot moves if sensor distance is greater than collision di
    // Serial.println(sensorDist());
 
     while (senseRight() == 1) {
-      stationaryLeftTurn(1, 50);
+      stationaryLeftTurn(3, 100);
     }
     
     while (senseLeft() == 1) {
-      stationaryRightTurn(1, 50);
+      stationaryRightTurn(3, 100);
     }
 }
 
@@ -399,6 +398,8 @@ void checkSides() { //checks the presense of an obstacle on the left or right us
 // MISC FUNCTIONS
 void updateAll() { // will make our updates from gyro and sensor before printing to LCD
   gyroHeading();
+  countsLeftCurrent = encoders.getCountsLeft();
+  countsRightCurrent = encoders.getCountsRight();
   printInfo();
 }
 
@@ -422,6 +423,7 @@ void stationaryRightTurn(float angle, int speed) {
   }
   motors.setSpeeds(0, 0); // stop
 }
+
 void stationaryLeftTurn(float angle, int speed) {
   float distance = angle * 0.05;
   int countsLeft = 0;
@@ -444,6 +446,9 @@ void stationaryLeftTurn(float angle, int speed) {
 }
 
 void printInfo() { //prints information to screen
+
+  // use this for demo 
+ 
   lcd.gotoXY(0, 0);
   lcd.print(sensorDist());
   lcd.print("  ");
@@ -451,6 +456,8 @@ void printInfo() { //prints information to screen
   lcd.print(gyroHeading());
   lcd.print(" ");
 
+
+// debugging
   /*
     Serial.println("Debug: left, right, middle, left, right");
     Serial.println(senseLeft());
@@ -460,10 +467,17 @@ void printInfo() { //prints information to screen
     Serial.println(sensorR.getDist());
 
   */
+/*
+  lcd.gotoXY(0, 0);
+  lcd.print(countsLeftCurrent-countsRightCurrent);
+  lcd.print("  ");
+  lcd.gotoXY(0, 1);
+  lcd.print(gyroHeading());
+  lcd.print(" ");
+  */
 }
 
 int gyroHeading() {
-
   imu.readGyro();
   turnRate = imu.g.z - gyroOffset;
   uint16_t m = micros();
@@ -472,12 +486,10 @@ int gyroHeading() {
   int32_t d = (int32_t)turnRate * dt;
   turnAngle += (int64_t)d * 7340032 / 17578125;
   turnAngleInDegrees = (((int32_t)turnAngle >> 16) * 360) >> 16;
-
   return turnAngleInDegrees;
 }
 
 void turnSensorReset() { // Modified from RotationResist
-
   gyroLastUpdate = micros();
   turnAngle = 0;
 }
@@ -488,14 +500,14 @@ void gyroReset() { // Modified from RotationResist
   imu.writeReg(LSM6::CTRL2_G, 0b10001000);
   delay(500);
   int32_t total = 0;
-  for (uint16_t i = 0; i < 1024; i++)
+  for (uint16_t i = 0; i < gyroResetSteps; i++)
   {
     while (!imu.readReg(LSM6::STATUS_REG) & 0x08);
     imu.read();
     total += imu.g.z;
     //Serial.println(i % 10);
   }
-  gyroOffset = total / 1024;
+  gyroOffset = total / gyroResetSteps;
   turnSensorReset();
   turnAngleInDegrees = (((int32_t)turnAngle >> 16) * 360) >> 16;
   buzzer.playFrequency(800, 100, 10); // beep to indicate calibration complete
