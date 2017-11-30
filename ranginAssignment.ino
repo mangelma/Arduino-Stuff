@@ -12,37 +12,28 @@ LSM6 imu;
 #define COLLISION_DIST 4
 #define E 2.71828
 #define MOUNT_DIST 1.26
-#define OFF_TRACK 90
 #define SIDE_THRESH 101
-#define MAX_HEAD 85
 
 uint32_t turnAngle = 0;               // rotationresist
 int turnAngleInDegrees;               // rotationresist
 int16_t turnRate;                     // rotationresist
 int16_t gyroOffset;                   // rotationresist
 uint16_t gyroLastUpdate = 0;          // rotationresist
-int countsLeft = 0;
-int countsRight = 0;
-int delayBetween = 500;
-int i = 0;
-int leftSpeed = 100;
-int rightSpeed = 120;
-int countsLeftCurrent;
-int countsRightCurrent;
+int leftSpeed = 100; // initial speeds
+int rightSpeed = 120; // initial speeds
 int gyroResetSteps = 1024;
 int stuckOrNot = 0;
 int sideAvoidDegrees = 3;
-int beep = 0;
-float sensedSide = 5;
+int beep = 1; // use for demo and video, not for general testing unless want to annoy people
 int turningSpeed = 100;
-int minConstraint = 50;
-int maxConstraint = 150;
+int minConstraint = 50; // for speeds
+int maxConstraint = 125; // for speeds
+float pFactor = 0.01; // used in backToInitial, how aggressively we are turning
 
 float sorteD(float, int);
 float sideDist[4];
 float desiredHead [4];
 float w = 0, x = 0, y = 0, z = 0;
-float Kp = 25, Ki = 0;
 
 const byte sensorPinR = A0;
 const byte sensorPinM = A2;
@@ -61,29 +52,28 @@ void setup() {
   Wire.begin();
   gyroReset();
   turnSensorReset();
-  lcd.gotoXY(0, 0);
-  lcd.print("ready");
-  lcd.print("   ");
 }
 
 void loop() {
-  updateAll();
+  updateAll(); // to print stuff on lcd before we get going
   if (buttonA.isPressed())
   {
     lcd.clear();
     delay(700);
-    for (i = 0; i < 500; i++)
-    {
-      updateAll();
+    updateAll();
+    while(true) {
       getGoing();
-      updateAll();
+      Serial.println(senseLeft());
+      Serial.println(senseRight());
+      Serial.println(sensorDist());
       activeAvoid(sideDist, 4, desiredHead, 4, &w, &x, &y, &z);
-      updateAll();
     }
   }
 }
 
-void activeAvoid(float sideDist[], int size, float desiredHead[], int, float *w, float *x, float *y, float *z) { //this is the inital avoidance algorithem
+// inital avoidance algorithem
+void activeAvoid(float sideDist[], int size, float desiredHead[], int, float *w, float *x, float *y, float *z) { 
+  updateAll();
   float bestRoute = 0;
   if (tooClose() == 1)
   {
@@ -97,66 +87,73 @@ void activeAvoid(float sideDist[], int size, float desiredHead[], int, float *w,
   }
 }
 
-void quickCheck(float sideDist[], int isize, float desiredHead[], int dSide, float *w, float *x, float *y, float *z) { //robot turns left and right to check distances of obstacles on each side and stores to an array
-
-  desiredHead[0] = 90;
-  desiredHead[1] = 60;
-  desiredHead[2] = 60;
-  desiredHead[3] = 60;
+// robot turns left and right to check distances of obstacles on each side and stores to an array
+void quickCheck(float sideDist[], int isize, float desiredHead[], int dSide, float *w, float *x, float *y, float *z) {
+  if (beep == 1) {
+      buzzer.playFrequency(800, 100, 10);
+    }
+  desiredHead[0] = 90; // -90 from start
+  desiredHead[1] = 60; // -30 from start
+  desiredHead[2] = 60; // +30 from start
+  desiredHead[3] = 60; // +90 from start
   stationaryLeftTurn(desiredHead[0], turningSpeed);
-  farLeft(sideDist, 4);
+  sideDist[0] = sensorDist();
   *w =  sideDist[0];
   updateAll();
   stationaryRightTurn(desiredHead[1], turningSpeed);
-  nearLeft(sideDist, 4);
+  sideDist[1] = sensorDist();
   *w =  sideDist[0];
   updateAll();
   stationaryRightTurn(desiredHead[2], turningSpeed);
-  farRight(sideDist, 4);
+  sideDist[2] = sensorDist();
   *y =  sideDist[2];
   updateAll();
   stationaryRightTurn(desiredHead[3], turningSpeed);
-  nearRight(sideDist, 4);
+  sideDist[3] = sensorDist();
   *z =  sideDist[3];
   updateAll();
 }
 
-void getGoing() {  //robot moves if sensor distance is greater than collision distance and heading is in forward direction
+// robot moves if sensor distance is greater than collision distance and heading is in forward direction
+void getGoing() {  
 
   while (sensorDist() > COLLISION_DIST && (senseLeft() != 1) && (senseRight() != 1))
   {
     updateAll();
     motors.setSpeeds(leftSpeed, rightSpeed);
     updateAll();
+       
 
-    // no obstacles
+    // no obstacles, turning towards initial heading
     if ((senseLeft() == 0) && (senseRight() == 0) && (sensorDist() > COLLISION_DIST)) {
+      Serial.println("no obstacles");
       backToInitial();
-      //sensedSide = 0;
-      if (sensedSide <= 0) {
-        buzzer.playFrequency(800, 100, 10);
-        sensedSide = 5;
-      }
     }
   }
 
   while (senseRight() == 1) {
+    if (beep == 1) {
+      buzzer.playFrequency(800, 100, 10);
+    }
+    Serial.println("turnin left");
     stationaryLeftTurn(sideAvoidDegrees, turningSpeed);
   }
 
   while (senseLeft() == 1) {
+    if (beep == 1) {
+      buzzer.playFrequency(800, 100, 10);
+    }
+    Serial.println("turning right");
     stationaryRightTurn(sideAvoidDegrees, turningSpeed);
   }
+
 }
 
+// adjusting motor speeds based on current heading
 void backToInitial() {
 
-  float speedAdjust = (abs(gyroHeading()) - speedAdjust) * 0.01;
-
-  //Serial.println(speedAdjust);
-  lcd.gotoXY(0, 1);
-  lcd.print(gyroHeading());
-  lcd.print(" ");
+  updateAll();
+  float speedAdjust = (abs(gyroHeading()) - speedAdjust) * pFactor;
 
   // slowly turning towards original heading
   if (gyroHeading() > 0) {
@@ -164,22 +161,26 @@ void backToInitial() {
     rightSpeed = rightSpeed - speedAdjust;
   }
 
+  // slowly turning towards original heading
   if (gyroHeading() < 0) {
     leftSpeed = leftSpeed - speedAdjust;
     rightSpeed = rightSpeed + speedAdjust;
   }
 
+  // slowing down if we are near obstacles
   if (gyroHeading() < 5 && gyroHeading() > -5) {
     leftSpeed = sensorDist() * 25 - 100;
     rightSpeed = sensorDist() * 25 - 100;
   }
 
+  // constraining
   if (leftSpeed < 0) {
     leftSpeed = constrain(leftSpeed, -maxConstraint, -minConstraint);
   } else {
     leftSpeed = constrain(leftSpeed, minConstraint, maxConstraint);
   }
 
+  // constraining
   if (rightSpeed < 0) {
     rightSpeed = constrain(rightSpeed, -maxConstraint, -minConstraint);
   } else {
@@ -189,7 +190,8 @@ void backToInitial() {
   motors.setSpeeds(leftSpeed, rightSpeed);
 }
 
-float sorteD(float sideDist[], int size) { //this bubble sort is used to find the distance giving Romi the most range to move when doing its quickCheck func.
+//  bubble sort to find the distance giving Romi the most range to move when doing its quickCheck func.
+float sorteD(float sideDist[], int size) {
   int i = 0, j = 0;
   float temp = 0, swap = 0;
   for (j = 0; j < 3; j++)
@@ -213,24 +215,8 @@ float sorteD(float sideDist[], int size) { //this bubble sort is used to find th
   return sideDist[3];
 }
 
-void farLeft(float sideDist[], int size) {
-  sideDist[0] = sensorDist();
-}
-
-void nearLeft(float sideDist[], int size) { //writes left side distances to array
-  sideDist[1] = sensorDist();
-}
-
-void nearRight(float sideDist[], int size) { //writes right side distances to array
-  sideDist[2] = sensorDist();
-}
-
-void farRight(float sideDist[], int size) { //writes right side distances to array
-  sideDist[3] = sensorDist();
-}
-
-float sensorDist() { //active ranging using analog sensor and calculated formula on exponential curve
-
+// calculating distance from analog sensor
+float sensorDist() {
   unsigned int rangeAway;
   float calcDistance;
   rangeAway = sensorM.getDist();
@@ -259,23 +245,25 @@ int senseRight() {
 }
 
 void makeMoves(float route, float *w, float *x, float *y, float *z) {
-
+  if (beep == 1) {
+      buzzer.playFrequency(800, 100, 10);
+    }
   if (stuckOrNot == 2) {
     stationaryLeftTurn(180, turningSpeed);
     stuckOrNot = 0;
   } else {
     if (route == *w)
     {
-      stationaryLeftTurn(desiredHead[1] + desiredHead[2] + desiredHead[3], 75);
+      stationaryLeftTurn(desiredHead[1] + desiredHead[2] + desiredHead[3], turningSpeed);
       stuckOrNot++;
     }
     else if (route == *x)
     {
-      stationaryLeftTurn(desiredHead[3] + desiredHead[2], 75);
+      stationaryLeftTurn(desiredHead[3] + desiredHead[2], turningSpeed);
     }
     else if (route == *y)
     {
-      stationaryLeftTurn(desiredHead[3], 75);
+      stationaryLeftTurn(desiredHead[3], turningSpeed);
     }
     else if (route == *z)
     {
@@ -284,18 +272,17 @@ void makeMoves(float route, float *w, float *x, float *y, float *z) {
   }
 }
 
-int tooClose() {  //checks if we are too close and sends back 0 or 1
+//checks if we are too close and sends back 0 or 1
+int tooClose() {
   int L = 0;
   L = (sensorDist() <= COLLISION_DIST) ? 1 : 0;
   updateAll();
   return L;
 }
 
-// MISC FUNCTIONS
-void updateAll() { // will make our updates from gyro and sensor before printing to LCD
+// will make our updates from gyro and sensor before printing to LCD
+void updateAll() {
   gyroHeading();
-  countsLeftCurrent = encoders.getCountsLeft();
-  countsRightCurrent = encoders.getCountsRight();
   printInfo();
 }
 
@@ -309,9 +296,7 @@ void stationaryRightTurn(float angle, int speed) {
   int countsRightBefore = encoders.getCountsRight();
   int lSpeed = speed;
   while (countsLeft <= leftTarget && countsRight >= rightTarget) {
-    if (beep == 1) {
-      buzzer.playFrequency(800, 100, 10);
-    }
+    
     updateAll();
     motors.setSpeeds(lSpeed, -speed);
     int leftAfter = encoders.getCountsLeft();
@@ -332,9 +317,6 @@ void stationaryLeftTurn(float angle, int speed) {
   int countsRightBefore = encoders.getCountsRight();
   int rSpeed = speed;
   while (countsLeft >= leftTarget && countsRight <= rightTarget) {
-    if (beep == 1) {
-      buzzer.playFrequency(800, 100, 10);
-    }
     updateAll();
     motors.setSpeeds(-speed, rSpeed);
     int leftAfter = encoders.getCountsLeft();
@@ -366,7 +348,7 @@ void reversing(float distance, int speed) {
   motors.setSpeeds(0, 0); // stop
 }
 
-void printInfo() { //prints information to screen
+void printInfo() {
   lcd.gotoXY(0, 0);
   lcd.print(sensorDist());
   lcd.print("  ");
