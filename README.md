@@ -1,5 +1,9 @@
 # Arduino-Stuff
 
+***
+Max Angelma & Ray De La Nuez
+***
+
 Active Ranging Assignment
 
 [![YouTubeVid](https://img.youtube.com/vi/XNLT4UEN9-Q/0.jpg)](https://youtu.be/XNLT4UEN9-Q)
