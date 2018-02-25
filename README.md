@@ -1,7 +1,8 @@
-# Arduino-Stuff
+# Robotic Technologies for Unmanned Systems assignments
 
 ***
 Max Angelma & Ray De La Nuez
+Fall 2017
 ***
 
 Active Ranging Assignment
